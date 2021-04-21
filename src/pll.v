@@ -6,26 +6,31 @@ bool analyze(
 {
 */
 module pll #(
-    parameter f_pllin = 16,
-    parameter f_pllout = 100,
-    parameter simple_feedback = 1,
+    parameter f_pllin =   16000000,
+    parameter f_pllout = 100000000,
+    parameter simple_feedback = 1
 ) (
     input wire pllin,
     output wire pllout,
     output wire locked
+    //output wire found_something_w
 );
 
-	localparam integer found_something = 0;
-	localparam real best_fout = 0.0;
-	reg [31:0] best_divr = 0;
-	reg [31:0] best_divf = 0;
-	reg [31:0] best_divq = 0;
-    localparam real f_pfd = 0.0;
-    localparam real f_vco = 0.0;
-    localparam real fout = 0.0;
-    genvar divr = 0;
+	integer best_fout = 0;
+	integer best_divr = 0;
+	integer best_divf = 0;
+	integer best_divq = 0;
+    integer found_something = 0;
+    integer f_pfd = 0;
+    integer f_vco = 0;
+    integer fout = 0;
+    integer choice_err = 0;
+    integer best_err = 0;
+    integer divr = 0;
+    integer divf = 0;
+    integer divq = 0;
 
-	integer divf_max = simple_feedback ? 127 : 63;
+	parameter divf_max = simple_feedback ? 127 : 63;
 	// The documentation in the iCE40 PLL Usage Guide incorrectly lists the
 	// maximum value of DIVF as 63, when it is only limited to 63 when using
 	// feedback modes other that SIMPLE.
@@ -37,45 +42,66 @@ module pll #(
 	//if (f_pllout < 16 || f_pllout > 275) begin
 	//	$display("Error: PLL output frequency MHz is outside range 16 MHz - 275 MHz!\n");
     //end
+    initial for(divr = 0; divr < 16; divr=divr+1) begin
+        f_pfd = $rtoi((f_pllin / (divr + 1)));
+        $display("f_pfd:%d", f_pfd);
+        if (!(f_pfd < 10*1e6 || f_pfd > 133*1e6)) for (divf = 0; divf <= divf_max; divf=divf+1) begin
+            if (simple_feedback) begin
 
-    specify
-        for(divr = 0; divr < 16; divr=divr+1) begin
-            specparam f_pfd = f_pllin / (divr + 1);
-            if (!(f_pfd < 10 || f_pfd > 133))
-            for (divf = 0; divf <= divf_max; divf=divf+1) begin
-                if (simple_feedback) begin
-                    specparam f_vco = f_pfd * (divf + 1);
-                    if (!(f_vco < 533 || f_vco > 1066))
-                    for (divq = 1; divq <= 6; divq++) begin
-                        specparam fout = f_vco * exp2(-divq);
+				f_vco = $rtoi(f_pfd * (divf + 1));
+                $display("f_vco:%d", f_vco);
+                if (!(f_vco < 533*1e6 || f_vco > 1066*1e6)) for (divq = 1; divq <= 6; divq=divq+1) begin
+                    fout = (f_pfd * (divf + 1)) >> divq;
+                    $display("fout:%d", fout);
 
-                        if (fabs(fout - f_pllout) < fabs(best_fout - f_pllout) || !found_something) begin
-                            specparam best_fout = fout;
-                            specparam best_divr = divr;
-                            specparam best_divf = divf;
-                            specparam best_divq = divq;
-                            specparam found_something = 1;
-                        end
+                    choice_err = fout > f_pllout ? fout - f_pllout : f_pllout - fout;
+                    best_err = best_fout > f_pllout ? best_fout - f_pllout : f_pllout - best_fout;
+                    if (choice_err < best_err || !found_something) begin
+                        best_fout = fout;
+                        best_divr = divr;
+                        best_divf = divf;
+                        best_divq = divq;
+                        found_something = 1;
+                        $display(best_fout);
+                        $display(best_divr);
+                        $display(best_divf);
+                        $display(best_divq);
+
                     end
-                end else begin
-                    for (divq = 1; divq <= 6; divq++) begin
-                        assign f_vco = f_pfd * (divf + 1) * exp2(divq);
-                        if (!(f_vco < 533 || f_vco > 1066)) begin 
+                end
+            end /*else begin
+                for (divq = 1; divq <= 6; divq=divq+1) begin
+                    localparam real f_vco = f_pfd * (divf + 1) * exp2(divq);
+                    if (!(f_vco < 533 || f_vco > 1066)) begin 
 
-                            assign fout = f_vco * exp2(-divq);
+                        localparam real fout = f_vco * exp2(-divq);
 
-                            if (fabs(fout - f_pllout) < fabs(best_fout - f_pllout) || !found_something) begin
-                                assign best_fout = fout;
-                                assign best_divr = divr;
-                                assign best_divf = divf;
-                                assign best_divq = divq;
-                                assign found_something = 1;
-                            end
+                        if (fabs(fout - f_pllout) < $abs(best_fout - f_pllout) || !found_something) begin
+                            localparam real best_fout = fout;
+                            localparam real best_divr = divr;
+                            localparam real best_divf = divf;
+                            localparam real best_divq = divq;
+                            localparam found_something = 1;
                         end
                     end
                 end
-            end
+            end*/
         end
-    endspecify
+    end
+
+    wire real a = 1.0;
+    wire real b;
+    foo foo0 (.a(a), .b(b));
+
+    //assign found_something_w = found_something;
+
+endmodule
+
+
+module foo(
+    input real a,
+    output real b
+);
+    assign b = a + 1.0;
 
 endmodule
