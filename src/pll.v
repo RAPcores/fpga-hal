@@ -39,16 +39,13 @@ module pll #(
         //	$display("Error: PLL output frequency MHz is outside range 16 MHz - 275 MHz!\n");
         //end
         initial for(divr = 0; divr < 16; divr=divr+1) begin
-            f_pfd = $rtoi((f_pllin / (divr + 1)));
-            $display("f_pfd:%d", f_pfd);
+            f_pfd = (f_pllin / (divr + 1));
             if (!(f_pfd < 10*1e6 || f_pfd > 133*1e6)) for (divf = 0; divf <= divf_max; divf=divf+1) begin
                 if (simple_feedback) begin
 
-                    f_vco = $rtoi(f_pfd * (divf + 1));
-                    $display("f_vco:%d", f_vco);
+                    f_vco = f_pfd * (divf + 1);
                     if (!(f_vco < 533*1e6 || f_vco > 1066*1e6)) for (divq = 1; divq <= 6; divq=divq+1) begin
                         fout = (f_pfd * (divf + 1)) >> divq;
-                        $display("fout:%d", fout);
 
                         choice_err = fout > f_pllout ? fout - f_pllout : f_pllout - fout;
                         best_err = best_fout > f_pllout ? best_fout - f_pllout : f_pllout - best_fout;
@@ -58,11 +55,6 @@ module pll #(
                             best_divf = divf;
                             best_divq = divq;
                             found_something = 1;
-                            $display(best_fout);
-                            $display(best_divr);
-                            $display(best_divf);
-                            $display(best_divq);
-
                         end
                     end
                 end /*else begin
