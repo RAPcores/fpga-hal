@@ -6,6 +6,7 @@ module pll #(
     parameter arch = "ice40"
 ) (
     input wire pllin,
+    input wire resetn,
     output wire pllout,
     output wire locked,
     output wire found_something_w,
@@ -96,12 +97,29 @@ module pll #(
         endfunction
 
         localparam ice40_result = ice40_pll_comp(f_pllin, f_pllout, simple_feedback);
+        localparam param_fout = ice40_result[31:0];
+        localparam param_divr = ice40_result[63:32];
+        localparam param_divf = ice40_result[95:64];
+        localparam param_divq = ice40_result[128:96];
+        localparam param_found_something = ice40_result[129];
         assign found_something_w = ice40_result[129];
         assign fout = ice40_result[31:0];
 
-        initial begin
-            $display(ice40_result);
-        end
+
+        SB_PLL40_CORE #(
+                .FEEDBACK_PATH("SIMPLE"),
+                .DIVR(4'b0000),		// DIVR =  0
+                .DIVF(7'b0100010),	// DIVF = 34
+                .DIVQ(3'b010),		// DIVQ =  2
+                .FILTER_RANGE(3'b001)	// FILTER_RANGE = 1
+        ) ice40_pll (
+                .LOCK(locked),
+                .RESETB(resetn),
+                .BYPASS(1'b0),
+                .REFERENCECLK(pllin),
+                .PLLOUTCORE(pllout)
+                );
+
 
     end
 
