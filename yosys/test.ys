@@ -1,0 +1,4 @@
+read_verilog -sv test/*
+hierarchy -check -top test_tb
+prep -top test_tb
+

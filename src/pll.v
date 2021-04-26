@@ -1,4 +1,8 @@
 
+/* PLL Module
+Derived from icepll and ecppll tools.
+*/
+
 module pll #(
     parameter f_pllin =   16000000,
     parameter f_pllout = 100000000,
@@ -6,27 +10,32 @@ module pll #(
     parameter arch = "ice40"
 ) (
     input wire pllin,
+    input wire resetn,
     output wire pllout,
     output wire locked
-    //output wire found_something_w
 );
 
-    if (arch == "ice40") begin
-        integer best_fout = 0;
-        integer best_divr = 0;
-        integer best_divf = 0;
-        integer best_divq = 0;
-        integer found_something = 0;
-        integer f_pfd = 0;
-        integer f_vco = 0;
-        integer fout = 0;
-        integer choice_err = 0;
-        integer best_err = 0;
-        integer divr = 0;
-        integer divf = 0;
-        integer divq = 0;
 
-        parameter divf_max = simple_feedback ? 127 : 63;
+    localparam divf_max = simple_feedback ? 127 : 63;
+
+    function [129:0] ice40_pll_comp;
+        input integer f_pllin;
+        input integer f_pllout;
+        input simple_feedback;
+        integer best_fout;
+        integer best_divr;
+        integer best_divf;
+        integer best_divq;
+        integer found_something;
+        integer f_pfd;
+        integer f_vco;
+        integer fout;
+        integer choice_err;
+        integer best_err;
+        integer divr;
+        integer divf;
+        integer divq;
+
         // The documentation in the iCE40 PLL Usage Guide incorrectly lists the
         // maximum value of DIVF as 63, when it is only limited to 63 when using
         // feedback modes other that SIMPLE.
@@ -38,9 +47,14 @@ module pll #(
         //if (f_pllout < 16 || f_pllout > 275) begin
         //	$display("Error: PLL output frequency MHz is outside range 16 MHz - 275 MHz!\n");
         //end
-        initial for(divr = 0; divr < 16; divr=divr+1) begin
+        for(divr = 0; divr < 16; divr=divr+1) begin
             f_pfd = (f_pllin / (divr + 1));
             if (!(f_pfd < 10*1e6 || f_pfd > 133*1e6)) for (divf = 0; divf <= divf_max; divf=divf+1) begin
+
+                if (divr == 0 && divf == 0) begin
+                    best_fout = 0;
+                    found_something = 0;
+                end
                 if (simple_feedback) begin
 
                     f_vco = f_pfd * (divf + 1);
@@ -55,6 +69,12 @@ module pll #(
                             best_divf = divf;
                             best_divq = divq;
                             found_something = 1;
+
+                            ice40_pll_comp[31:0] = fout;
+                            ice40_pll_comp[63:32] = divr;
+                            ice40_pll_comp[95:64] = divf;
+                            ice40_pll_comp[128:96] = divq;
+                            ice40_pll_comp[129] = 1;
                         end
                     end
                 end /*else begin
@@ -76,8 +96,42 @@ module pll #(
                 end*/
             end
         end
+    endfunction
+
+    if (arch == "ice40") begin
+        // Calculate Ice40 Params
+        // ret: {found_something, divq, divf, divr, fout }
 
 
+        localparam ice40_result = ice40_pll_comp(f_pllin, f_pllout, simple_feedback);
+        localparam param_fout = ice40_result[31:0];
+        localparam param_divr = ice40_result[63:32];
+        localparam param_divf = ice40_result[95:64];
+        localparam param_divq = ice40_result[128:96];
+        localparam param_found_something = ice40_result[129];
+        assign found_something_w = ice40_result[129];
+        localparam fout = ice40_result[31:0];
+
+        SB_PLL40_CORE #(
+                .FEEDBACK_PATH("SIMPLE"),
+                .DIVR(4'b0000),		// DIVR =  0
+                .DIVF(7'b0100010),	// DIVF = 34
+                .DIVQ(3'b010),		// DIVQ =  2
+                .FILTER_RANGE(3'b001)	// FILTER_RANGE = 1
+        ) ice40_pll (
+                .LOCK(locked),
+                .RESETB(resetn),
+                .BYPASS(1'b0),
+                .REFERENCECLK(pllin),
+                .PLLOUTCORE(pllout)
+                );
+
+    end else begin
+        
+    end
+
+    initial begin
+        $display(fout);
     end
 
 endmodule
